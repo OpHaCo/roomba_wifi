@@ -40,5 +40,4 @@ Resurrect your old Roomba! Add Wifi connectivity and control it from anyway!
 # References
  * https://community.particle.io/t/sparkbot-spark-core-roomba/625
  * https://community.particle.io/t/getting-mac-address-of-unconnected-core/8473/5
-
-<img src="https://raw.githubusercontent.com/Lahorde/roomba_wifi/master/img/roomba_hack_0.JPG" width="500">
+ * http://blog.particle.io/2014/08/06/control-the-connection/
