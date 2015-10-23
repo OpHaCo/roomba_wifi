@@ -13,8 +13,8 @@
 # Add something like this to you bash profile:
 #
 
-export SPARK_CORE_DEVICE_ID=55ff6d065075555319241887
-export SPARK_CORE_ACCESS_TOKEN=b873f157588aa1ff4ec3a6b053154695355b929d
+#export SPARK_CORE_DEVICE_ID=
+#export SPARK_CORE_ACCESS_TOKEN=
 
 #     source ~/Downloads/spark_core_rc_car_bash_script.sh <<<- YOU WILL NEED TO CHANGE THIS!
 #
@@ -40,7 +40,7 @@ function rc_while() {
 }
  
 function rc() {
-  _base_command='curl https://api.spark.io/v1/devices/'"$SPARK_CORE_DEVICE_ID"'/myAPI -d access_token='"$SPARK_CORE_ACCESS_TOKEN"' -d "params=rc,__CMD__"'
+  _base_command='curl https://api.spark.io/v1/devices/'"$SPARK_CORE_DEVICE_ID"'/roombaAPI -d access_token='"$SPARK_CORE_ACCESS_TOKEN"' -d "params=__CMD__"'
   case "$1" in
   8) echo "Forward march!"
     _command=$(echo "${_base_command}" | sed 's/__CMD__/FORWARD/')
@@ -86,7 +86,7 @@ function rc() {
      ;;  
     
 
-  *) echo "Don't know what to do with $1 : f=forward, b=back, l=left, r=right, s=stop, e=song, p=vacuum on, o=vacuum off, l=leds, h=go home, g=full control mode"
+  *) echo "Don't know what to do with $1 : 8=forward, 2=back, 4=left, 6=right, 5=stop, e=song, p=vacuum on, o=vacuum off, l=leds, h=go home, g=full control mode, z=free control, c=clean, a=power"
      ;;
   esac
  

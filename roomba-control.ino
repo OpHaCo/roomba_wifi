@@ -1,15 +1,11 @@
 // SparkBot Firmware
-// Began 12/4
-// Last updated 12/9
-//
-// Firmware for controlling a Spark Core connected to a Roomba Vacuum cleaner, controlled by sparkbot_bashscript.sh
+// Roomba controller over WIFI
+//https://github.com/Lahorde/roomba_wifi
 // Link to project share on Spark Community site below:
 // 
 // https://community.sparkdevices.com/t/sparkbot-manually-automatically-vacuum-your-living-room/625
 //
 // Credits to http://skaterj10.hackhut.com/2013/01/22/roomba-hacking-101/ for the tips!
-
-
 
 // Start with function definitions
 void goForward();
@@ -26,10 +22,10 @@ void clean();
 void power();
 void gainControl();
 void freeControl();
-int rcCarControl(String command);
+int roombaControl(String command);
 
 // Variable definions
-int ddPin = D0;                                      // ddPin used to communicate over serial with Roomba
+int ddPin = D0;                                      // ddPin controls clean button
 int ledPin = D7;                                     // User LED on the Core for status notification
 char sensorbytes[10];
 
@@ -39,7 +35,7 @@ char sensorbytes[10];
 // Setup
 void setup() {
 
-  Spark.function("myAPI", rcCarControl);            // Explose the rccar function to the Spark API
+  Spark.function("roombaAPI", roombaControl);            // Expose the roomba function to the Spark API
   
   power();
 
@@ -112,7 +108,7 @@ void power()
     //GPIO connected to clean button
     pinMode(ddPin, OUTPUT);
     digitalWrite(ddPin, LOW);
-    delay(1000);
+    delay(300);
     pinMode(ddPin, INPUT_PULLUP);
 }
 
@@ -236,87 +232,87 @@ void updateSensors() {                              // Requests a sensor update 
   }    
 }
 
-int rcCarControl(String command)
+int roombaControl(String command)
 {
-  if(command.substring(3,7) == "STOP")              // STOP command
+  if(command.substring(0,4) == "STOP")              // STOP command
   {
     stop();
     return 1;
   }
 
-  if(command.substring(3,7) == "BACK")              // BACK command
+  if(command.substring(0,4) == "BACK")              // BACK command
   {
     goBackward();
     return 1;
   }
 
-  if(command.substring(3,10) == "FORWARD")          // FORWARD command
+  if(command.substring(0,7) == "FORWARD")          // FORWARD command
   {
     goForward();
     return 1;
   }
 
-  if(command.substring(3,8) == "RIGHT")             // RIGHT command
+  if(command.substring(0,5) == "RIGHT")             // RIGHT command
   {
     spinRight();
     return 1;
   }
 
-  if(command.substring(3,7) == "LEFT")              // LEFT command
+  if(command.substring(0,4) == "LEFT")              // LEFT command
   {
     spinLeft();
     return 1;
   }
 
-  if(command.substring(3,7) == "SONG")              // SONG command
+  if(command.substring(0,4) == "SONG")              // SONG command
   {
     playSong();
     return 1;
   }
 
-  if(command.substring(3,11) == "VACUUMON")         // VACUUMON command
+  if(command.substring(0,8) == "VACUUMON")         // VACUUMON command
   {
     vacuumOn();
     return 1;
   }
 
-  if(command.substring(3,12) == "VACUUMOFF")        // VACUUMOFF command
+  if(command.substring(0,9) == "VACUUMOFF")        // VACUUMOFF command
   {
     vacuumOff();
     return 1;
   }
 
-  if(command.substring(3,11) == "VIBGYOR")          // VIBGYOR command
+  if(command.substring(0,8) == "VIBGYOR")          // VIBGYOR command
   {
     vibgyor();
     return 1;
   }
 
-  if(command.substring(3,9) == "GOHOME")            // GOHOME command
+  if(command.substring(0,6) == "GOHOME")            // GOHOME command
   {
     goHome();
     return 1;
   }
 
-  if(command.substring(3,14) == "GAINCONTROL")      // GAINCONTROL command
+  if(command.substring(0,11) == "GAINCONTROL")      // GAINCONTROL command
   {
     gainControl();
     return 1;
   }
   
-  if(command.substring(3,8) == "CLEAN")      // CLEAN command
+  if(command.substring(0,5) == "CLEAN")      // CLEAN command
   {
     clean();
     return 1;
   }
   
-  if(command.substring(3,8) == "POWER")      // Power command
+  if(command.substring(0,5) == "POWER")      // Power command
   {
     power();
     return 1;
   }
   
-  if(command.substring(3,14) == "FREECONTROL")      // Power command
+  if(command.substring(0,11) == "FREECONTROL")      // Power command
   {
     freeControl();
     return 1;
