@@ -26,6 +26,15 @@
  * work.  If not, see <http://creativecommons.org/licenses/by/3.0/>.
  *****************************************************************************/
 
+typedef enum{
+    OFF = 0,
+    PASSIVE = 1,
+    SAFE = 2,
+    FULL = 3
+}EIOMode;
+
+#define NO_BYTE_READ 0x100
+
 void goForward();
 void goBackward();
 void spinLeft();
@@ -41,14 +50,8 @@ void power();
 void gainControl();
 void freeControl();
 EIOMode getMode(void);
+int readByte(int8_t& readByte, int timeout);
 int roombaControl(String command);
-
-typedef enum{
-    OFF = 0,
-    PASSIVE = 1,
-    SAFE = 2,
-    FULL = 3
-}EIOMode;
 
 // Variable definions
 int ddPin = D0;                                      // ddPin controls clean button
@@ -61,7 +64,7 @@ char sensorbytes[10];
 // Setup
 void setup() {
 
-  Spark.function("roombaAPI", roombaControl);            // Expose the roomba function to the Spark API
+  Particle.function("roombaAPI", roombaControl);            // Expose the roomba function to the Spark API
   
   power();
 
@@ -241,15 +244,37 @@ void freeControl()
 
 EIOMode getMode(void)
 {
-  uint_8 count = 0;
+  int8_t loc_readByte = 0;
   
   Serial1.write(35);
 
-  while(!Serial.available() && count++ < 10){
-    delay(10);
+  if(readByte(loc_readByte, 100) == NO_BYTE_READ)
+  {
+      return (EIOMode)-1;
   }
-  if(count <= 10){
+  else
+  {
+      return  (EIOMode)loc_readByte;
   }
+}
+
+int readByte(int8_t& readByte, int timeout)
+{
+  int count = 0;
+  const uint8_t DELAY = 10;
+  //ceil 
+  const int MAX_INDEX = 1 + ((timeout -1)/DELAY);
+
+  for(count = 0; count <= MAX_INDEX; count++)
+  {
+      if(Serial1.available())
+      {
+          readByte = Serial1.read();
+          return  0;
+      }
+      delay(DELAY);
+  }
+  return NO_BYTE_READ;
 }
 
 void updateSensors() {                              // Requests a sensor update from the Roomba.  The sensors on our Roomba are broken.
@@ -270,6 +295,7 @@ void updateSensors() {                              // Requests a sensor update 
     sensorbytes[i++] = c;
   }    
 }
+
 
 int roombaControl(String command)
 {
@@ -351,12 +377,16 @@ int roombaControl(String command)
     return 1;
   }
   
-  if(command.substring(0,11) == "FREECONTROL")      // Power command
+  if(command.substring(0,11) == "FREECONTROL")      // Free control
   {
     freeControl();
     return 1;
   }
+  
+  if(command.substring(0,7) == "GETMODE")      // Get mode
+  {
+    return getMode();
+  }
 
   // If none of the commands were executed, return false
   return -1;
-}

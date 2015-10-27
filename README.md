@@ -10,7 +10,7 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
     sudo particle flash --usb cc3000
     sudo particle flash --usb deep_update_2014_06
     ``` 
- * Roomba - here model R3MOD24A
+ * Roomba - here model R3MOD24A - Unfortunately, commands can be sent to Roomba trew UART but INPUT commands are not received : no activity on Roomba Tx
 
 # Setup
 ## hardware 
@@ -49,4 +49,4 @@ ex :
  * http://blog.particle.io/2014/08/06/control-the-connection/
 
 # TODO
- * Input commands : get mode, get battery state.
+ * get another Roomba to handle input commands! 
