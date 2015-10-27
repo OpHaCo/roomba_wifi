@@ -1,13 +1,31 @@
-// SparkBot Firmware
-// Roomba controller over WIFI
-//https://github.com/Lahorde/roomba_wifi
-// Link to project share on Spark Community site below:
-// 
-// https://community.sparkdevices.com/t/sparkbot-manually-automatically-vacuum-your-living-room/625
-//
-// Credits to http://skaterj10.hackhut.com/2013/01/22/roomba-hacking-101/ for the tips!
+/******************************************************************************
+ * @file    roomba spark firmware
+ * @author  Rémi Pincent - INRIA
+ * @date    16 sept. 2015   
+ *
+ * @brief Spark core firmware controlling croomba over WIFI
+ * 
+ * Project : roomba_wifi - https://github.com/OpHaCo/roomba_wifi
+ * Contact:  Rémi Pincent - remi.pincent@inria.fr
+ * 
+ * Revision History:
+ * Refer https://github.com/OpHaCo/roomba_wifi
+ * 
+ * LICENSING
+ * roomba_wifi (c) by Rémi Pincent
+ * 
+ * roomba_wifi is licensed under a
+ * Creative Commons Attribution 3.0 Unported License.
+ * 
+ * Credits : 
+ *     https://community.sparkdevices.com/t/sparkbot-manually-automatically-vacuum-your-living-room/625
+ *    http://skaterj10.hackhut.com/2013/01/22/roomba-hacking-101/
+ *    https://community.particle.io/t/sparkbot-spark-core-roomba/625
+ * 
+ * You should have received a copy of the license along with this
+ * work.  If not, see <http://creativecommons.org/licenses/by/3.0/>.
+ *****************************************************************************/
 
-// Start with function definitions
 void goForward();
 void goBackward();
 void spinLeft();
@@ -22,7 +40,15 @@ void clean();
 void power();
 void gainControl();
 void freeControl();
+EIOMode getMode(void);
 int roombaControl(String command);
+
+typedef enum{
+    OFF = 0,
+    PASSIVE = 1,
+    SAFE = 2,
+    FULL = 3
+}EIOMode;
 
 // Variable definions
 int ddPin = D0;                                      // ddPin controls clean button
@@ -211,6 +237,19 @@ void freeControl()
   // Get the Roomba into control mode 
   Serial1.write(128);                               // Passive mode
   delay(50);
+}
+
+EIOMode getMode(void)
+{
+  uint_8 count = 0;
+  
+  Serial1.write(35);
+
+  while(!Serial.available() && count++ < 10){
+    delay(10);
+  }
+  if(count <= 10){
+  }
 }
 
 void updateSensors() {                              // Requests a sensor update from the Roomba.  The sensors on our Roomba are broken.
