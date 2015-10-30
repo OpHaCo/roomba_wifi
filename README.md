@@ -82,8 +82,11 @@ Return value as integer in "return_value" field
     3 SAFE
     4 FULL
     ```
+     * GETMODE 
+      * return value : current roomba charge in mAh
+      
 ex :
-    
+
     curl https://api.spark.io/v1/devices/SPARK_CORE_ID/roombaAPI -d access_token='YOUR_TOKEN' -d "params=GETMODE"
     {
       "id": "ID",

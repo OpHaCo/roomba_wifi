@@ -53,6 +53,7 @@ void setPassiveMode();
 void setSafeMode();
 void freeControl();
 EIOMode getMode(void);
+uint16_t getBatteryCharge(void);
 int readByte(int8_t& readByte, int timeout);
 int roombaControl(String command);
 
@@ -115,6 +116,7 @@ static TsControlCommandMap cmds[] =
 static TsInputCommandMap inputCmds[] = 
 {
     {"GETMODE",                (int (*)(void)) (&getMode)},
+    {"GETBATT",                (int (*)(void)) (&getBatteryCharge)},
 };
 
 // Variable definions
@@ -324,6 +326,26 @@ EIOMode getMode(void)
       /** +1 increment... in order to not returining 0 */
       return  (EIOMode)(loc_readByte + 1);
   }
+}
+
+uint16_t getBatteryCharge()
+{
+  int8_t loc_readByte = 0;
+  uint16_t battLevel = 0;
+  
+  Serial1.write(25);
+
+  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
+  {
+      return -1;
+  }
+  battLevel = loc_readByte << 8;
+  
+  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
+  {
+      return -1;
+  }
+  return loc_readByte + battLevel;
 }
 
 int readByte(int8_t& readByte, int timeout)
