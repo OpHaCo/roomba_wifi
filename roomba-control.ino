@@ -27,10 +27,10 @@
  *****************************************************************************/
 
 typedef enum{
-    OFF = 0,
-    PASSIVE = 1,
-    SAFE = 2,
-    FULL = 3
+    OFF = 1,
+    PASSIVE = 2,
+    SAFE = 3,
+    FULL = 4
 }EIOMode;
 
 #define NO_BYTE_READ 0x100
@@ -46,16 +46,79 @@ void vacuumOn();
 void vacuumOff();
 void goHome();
 void clean();
-void power();
+void powerOn();
+void powerOff();
 void gainControl();
+void setPassiveMode();
+void setSafeMode();
 void freeControl();
 EIOMode getMode(void);
 int readByte(int8_t& readByte, int timeout);
 int roombaControl(String command);
 
+typedef struct{
+    String cmdName;
+    void (*controlCmd)(void);
+}TsControlCommandMap;
+
+typedef struct{
+    String cmdName;
+    void (*controlCmd)(void);
+}TsCommandMap;
+
+typedef struct{
+    String cmdName;
+    int (*inputCmd)(void);
+}TsInputCommandMap;
+
+/*********************************************************
+ * COMMANDS REQUIRING AT LEAST PASSIVE MODE - AFTER 
+ * COMMAND EXECUTION ROOMBA GOES BACK IN PASSIVE MODE
+ ********************************************************/ 
+static TsControlCommandMap pToPControlCmds[] = 
+{
+    {"GOHOME",               &goHome},
+    {"CLEAN",                &clean},
+};
+
+/*********************************************************
+ * COMMANDS REQUIRING SAFE MODE - AFTER COMMAND EXECUTION 
+ * ROOMBA STAY IN THIS MODE
+ ********************************************************/ 
+static TsControlCommandMap sToSControlCmds[] = 
+{
+    {"STOP",                 &stop},
+    {"BACK",                 &goBackward},
+    {"FORWARD",              &goForward},
+    {"RIGHT",                &spinRight},
+    {"LEFT",                 &spinLeft},
+    {"SONG",                 &playSong},
+    {"VACUUMON",             &vacuumOn},
+    {"VACUUMOFF",            &vacuumOff},
+    {"VIBGYOR",              &vibgyor},
+};
+
+/**********************************************
+ * FOR THESE COMMANDS NO MODE REQUIRED
+ *********************************************/ 
+static TsControlCommandMap cmds[] = 
+{
+    {"POWERON",              &powerOn},
+    {"POWEROFF",             &powerOff},
+    {"FREECONTROL",          &freeControl},
+    {"GAINCONTROL",          &gainControl}
+};
+
+/**********************************************
+ * INPUT CMDS
+ *********************************************/ 
+static TsInputCommandMap inputCmds[] = 
+{
+    {"GETMODE",                (int (*)(void)) (&getMode)},
+};
+
 // Variable definions
-int ddPin = D0;                                      // ddPin controls clean button
-int ledPin = D7;                                     // User LED on the Core for status notification
+int ddPin = D0;                                      // ddPin controls clean button                               
 char sensorbytes[10];
 
 #define bumpright (sensorbytes[0] & 0x01)
@@ -65,23 +128,10 @@ char sensorbytes[10];
 void setup() {
 
   Particle.function("roombaAPI", roombaControl);            // Expose the roomba function to the Spark API
-  
-  power();
 
 // Pinmode definitions and begin serial
   pinMode(ddPin, INPUT_PULLUP);                     // sets the pins as input
-  pinMode(ledPin, OUTPUT);                          // sets the pins as output
   Serial1.begin(115200);
-  digitalWrite(ledPin, HIGH);                       // say we're alive
-
-  // Get the Roomba into control mode 
-  Serial1.write(128);                               // Passive mode
-  delay(50);
-  Serial1.write(130);                               // Safe mode
-  delay(50);
-  Serial1.write(132);                               // Full Control mode
-  delay(50);
-  digitalWrite(ledPin, LOW);                        // Setup is complete when the D7 user LED goes out
 }
 
 
@@ -132,7 +182,7 @@ void clean() {
   Serial1.write(135);                               // Starts a cleaning cycle, so command 143 can be initiated
 }
 
-void power()
+void powerOn()
 {
     //GPIO connected to clean button
     pinMode(ddPin, OUTPUT);
@@ -141,10 +191,20 @@ void power()
     pinMode(ddPin, INPUT_PULLUP);
 }
 
+void powerOff()
+{
+    //GPIO connected to clean button
+    pinMode(ddPin, OUTPUT);
+    digitalWrite(ddPin, LOW);
+    delay(2000);
+    pinMode(ddPin, INPUT_PULLUP);
+}
+
 void goHome() {                                     // Sends the Roomba back to it's charging base
-  clean();                                          // Starts a cleaning cycle, so command 143 can be initiated
-  delay(5000);
+  //clean();                                          // Starts a cleaning cycle, so command 143 can be initiated
+  //delay(5000);
   Serial1.write(143);                               // Sends the Roomba home to charge
+  delay(50);
 }
 
 void playSong() {                                   // Makes the Roomba play a little ditty
@@ -225,15 +285,22 @@ void vibgyor() {                                    // Makes the main LED behind
 }
 
 void gainControl() {                                // Gain control of the Roomba once it's gone back into passive mode
-  // Get the Roomba into control mode 
-  Serial1.write(128);                               // Passive mode
-  delay(50);
-  Serial1.write(130);                               // Safe mode
-  delay(50);
+  setSafeMode();
   Serial1.write(132);                               // Full control mode
   delay(50);
 }
 
+void setPassiveMode() {                                // Gain control of the Roomba once it's gone back into passive mode
+  // Get the Roomba into control mode 
+  Serial1.write(128);   
+  delay(50);    
+}
+
+void setSafeMode() {                                // Gain control of the Roomba once it's gone back into passive mode
+  setPassiveMode(); 
+  Serial1.write(130);                               // Safe mode
+  delay(50);  
+}
 
 void freeControl()
 {
@@ -254,7 +321,8 @@ EIOMode getMode(void)
   }
   else
   {
-      return  (EIOMode)loc_readByte;
+      /** +1 increment... in order to not returining 0 */
+      return  (EIOMode)(loc_readByte + 1);
   }
 }
 
@@ -277,116 +345,60 @@ int readByte(int8_t& readByte, int timeout)
   return NO_BYTE_READ;
 }
 
-void updateSensors() {                              // Requests a sensor update from the Roomba.  The sensors on our Roomba are broken.
-  Serial1.write(142);
-  Serial1.write(1);                                 // sensor packet 1, 10 bytes
-  delay(100);                                       // wait for sensors 
-  int i = 0;
-  while(Serial1.available()) {
-    int c = Serial1.read();
-    if( c==-1 ) {
-      for( int i=0; i<5; i ++ ) {                   // say we had an error via the LED
-        digitalWrite(ledPin, HIGH); 
-        delay(50);
-        digitalWrite(ledPin, LOW);  
-        delay(50);
-      }
-    }
-    sensorbytes[i++] = c;
-  }    
-}
-
-
 int roombaControl(String command)
 {
-  if(command.substring(0,4) == "STOP")              // STOP command
+  int cmdIndex = 0;    
+  /****************************************************
+   * HANDLE COMMANDS NOT REQUIRING ANY MODE
+   * *************************************************/
+  for(cmdIndex = 0; cmdIndex < sizeof(cmds)/sizeof(cmds[0]); cmdIndex++)
   {
-    stop();
-    return 1;
+      if(cmds[cmdIndex].cmdName.equals(command))
+      {
+          cmds[cmdIndex].controlCmd();
+          return 0;
+      }
   }
 
-  if(command.substring(0,4) == "BACK")              // BACK command
+  /****************************************************
+   * HANDLE COMMANDS REQURING PASSIVE MODE
+   * *************************************************/
+  for(cmdIndex = 0; cmdIndex < sizeof(pToPControlCmds)/sizeof(pToPControlCmds)[0]; cmdIndex++)
   {
-    goBackward();
-    return 1;
-  }
-
-  if(command.substring(0,7) == "FORWARD")          // FORWARD command
-  {
-    goForward();
-    return 1;
-  }
-
-  if(command.substring(0,5) == "RIGHT")             // RIGHT command
-  {
-    spinRight();
-    return 1;
-  }
-
-  if(command.substring(0,4) == "LEFT")              // LEFT command
-  {
-    spinLeft();
-    return 1;
-  }
-
-  if(command.substring(0,4) == "SONG")              // SONG command
-  {
-    playSong();
-    return 1;
-  }
-
-  if(command.substring(0,8) == "VACUUMON")         // VACUUMON command
-  {
-    vacuumOn();
-    return 1;
-  }
-
-  if(command.substring(0,9) == "VACUUMOFF")        // VACUUMOFF command
-  {
-    vacuumOff();
-    return 1;
-  }
-
-  if(command.substring(0,8) == "VIBGYOR")          // VIBGYOR command
-  {
-    vibgyor();
-    return 1;
-  }
-
-  if(command.substring(0,6) == "GOHOME")            // GOHOME command
-  {
-    goHome();
-    return 1;
-  }
-
-  if(command.substring(0,11) == "GAINCONTROL")      // GAINCONTROL command
-  {
-    gainControl();
-    return 1;
+      if(pToPControlCmds[cmdIndex].cmdName.equals(command))
+      {
+          setPassiveMode();
+          pToPControlCmds[cmdIndex].controlCmd();
+          return 0;
+      }
   }
   
-  if(command.substring(0,5) == "CLEAN")      // CLEAN command
+  /****************************************************
+   * HANDLE COMMANDS REQURING SAFE MODE
+   * *************************************************/
+  for(cmdIndex = 0; cmdIndex < sizeof(sToSControlCmds)/sizeof(sToSControlCmds)[0]; cmdIndex++)
   {
-    clean();
-    return 1;
-  }
-  
-  if(command.substring(0,5) == "POWER")      // Power command
+      if(sToSControlCmds[cmdIndex].cmdName.equals(command))
+      {
+          setSafeMode();
+          sToSControlCmds[cmdIndex].controlCmd();
+          /** ROOMBA NOW IN SAFE MODE!!! **/
+          return 0;
+      }
+  }  
+ 
+   /****************************************************
+   * HANDLE INPUT COMMANDS
+   * *************************************************/
+  for(cmdIndex = 0; cmdIndex < sizeof(inputCmds)/sizeof(inputCmds)[0]; cmdIndex++)
   {
-    power();
-    return 1;
-  }
-  
-  if(command.substring(0,11) == "FREECONTROL")      // Free control
-  {
-    freeControl();
-    return 1;
-  }
-  
-  if(command.substring(0,7) == "GETMODE")      // Get mode
-  {
-    return getMode();
+      if(inputCmds[cmdIndex].cmdName.equals(command))
+      {
+          setPassiveMode();
+          return inputCmds[cmdIndex].inputCmd();
+      }
   }
 
   // If none of the commands were executed, return false
   return -1;
+}  
