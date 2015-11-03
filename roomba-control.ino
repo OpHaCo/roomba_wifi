@@ -1,3 +1,6 @@
+// This #include statement was automatically added by the Particle IDE.
+#include "MQTT.h"
+
 /******************************************************************************
  * @file    roomba spark firmware
  * @author  Rémi Pincent - INRIA
@@ -35,6 +38,7 @@ typedef enum{
 
 #define NO_BYTE_READ 0x100
 
+void connectMQTT(void);
 void goForward();
 void goBackward();
 void spinLeft();
@@ -56,6 +60,7 @@ EIOMode getMode(void);
 uint16_t getBatteryCharge(void);
 int readByte(int8_t& readByte, int timeout);
 int roombaControl(String command);
+void mqttCallback(char* topic, byte* payload, unsigned int length);
 
 typedef struct{
     String cmdName;
@@ -122,9 +127,34 @@ static TsInputCommandMap inputCmds[] =
 // Variable definions
 int ddPin = D0;                                      // ddPin controls clean button                               
 char sensorbytes[10];
+//iot.eclipse.org
+//byte mqttserver[] = { 198,41,30,241 }; 
+//rpi
+byte mqttserver[] = { 192,168,132,47 }; 
+//byte mqttserver[] = { 192,168,132,10 }; 
+MQTT mqttClient(mqttserver, 1883, mqttCallback);
+
+char* mqttRoombaCmdsTopic = "roomba/roombaCmds";
+char* mqttRoombaCloudTopic = "roomba/particleCloud";
 
 #define bumpright (sensorbytes[0] & 0x01)
 #define bumpleft  (sensorbytes[0] & 0x02)
+
+
+SYSTEM_MODE(MANUAL);
+
+void connectMQTT(void)
+{
+   Serial.println("connect mqtt");
+   mqttClient.connect("roomba_photon"); 
+   if (mqttClient.isConnected()) 
+   {
+       // Now a single roomba can be connected at a time
+       mqttClient.subscribe(mqttRoombaCmdsTopic);
+       mqttClient.subscribe(mqttRoombaCloudTopic);
+       Serial.println("connected to mqtt");
+   }
+}
 
 // Setup
 void setup() {
@@ -134,11 +164,34 @@ void setup() {
 // Pinmode definitions and begin serial
   pinMode(ddPin, INPUT_PULLUP);                     // sets the pins as input
   Serial1.begin(115200);
+  Serial.println("start roomba control");
+  
+  WiFi.on();
+  WiFi.connect();
+  while(WiFi.connecting())
+  {
+    delay(10);
+  }
+  connectMQTT();
+  Particle.connect();
 }
 
 
 // Loop is empty since we are waiting for commands from the API
 void loop() {
+    static int loopIndex;
+    loopIndex++;
+    if (mqttClient.isConnected()) {
+        mqttClient.loop(); 
+    }
+    else
+    {
+        Serial.print("mqtt client not connected - id=");
+        Serial.println(loopIndex);
+        connectMQTT();
+     }  
+     if(Particle.connected())
+       Particle.process();
 }
 
 
@@ -340,8 +393,7 @@ uint16_t getBatteryCharge()
       return -1;
   }
   battLevel = loc_readByte << 8;
-  
-  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
+    if(readByte(loc_readByte, 50) == NO_BYTE_READ)
   {
       return -1;
   }
@@ -424,3 +476,29 @@ int roombaControl(String command)
   // If none of the commands were executed, return false
   return -1;
 }  
+
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    char p[length + 1];
+    memcpy(p, payload, length);
+    p[length] = NULL;
+    String message(p);
+    Serial.print("received MQTT payload ");
+    Serial.print(message);
+    Serial.print(" on topic ");
+    Serial.println(topic);
+    if(strcmp(topic, mqttRoombaCloudTopic) == 0)
+    {
+        if (message.equals("ENABLE") && !Particle.connected()){
+            Particle.connect();
+        }
+        else if(message.equals("DISABLE") && Particle.connected())      
+        {
+            Particle.disconnect();
+        }
+    }
+    else if(strcmp(topic, mqttRoombaCmdsTopic) == 0)
+    {
+        roombaControl(message);
+    }
+}

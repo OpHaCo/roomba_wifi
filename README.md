@@ -32,11 +32,10 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
 
 
 # Commands
-Command line syntax :
 
-    curl https://api.spark.io/v1/devices/SPARK_CORE_ID/roombaAPI -d access_token='YOUR_TOKEN' -d "params=CMD_NAME"
- 
-## Control commands
+Commands can be sent either using MQTT protocol or using Particle API
+
+## Control commands - as string
  * CMD_NAME = 
   * AFTER THESE COMMANDS ROOMBA IS IN PASSIVE MODE
     * GOHOME
@@ -57,6 +56,12 @@ Command line syntax :
   * POWERON
   * POWEROFF
 
+## Roomba control over particle API
+
+Command line syntax :
+
+    curl https://api.spark.io/v1/devices/SPARK_CORE_ID/roombaAPI -d access_token='YOUR_TOKEN' -d "params=CMD_NAME"
+
 ex :
     
     curl https://api.spark.io/v1/devices/SPARK_CORE_ID/roombaAPI -d access_token='YOUR_TOKEN' -d "params=SONG"
@@ -67,6 +72,25 @@ ex :
       "return_value": 0
     }
 
+## Roomba control over MQTT
+ * a valid MQTT broker must be defined in Photon code mqttserver variable 
+
+### topics
+#### "roomba/roombaCmds" : roomba control commands
+In this topic, payload containing command name must be sent, 
+
+e.g :
+
+    mosquitto_pub -h BROKER_IP -t roomba/roombaCmds -m SONG
+ 
+#### "roomba/particleCloud" : roomba cloud connection
+To enable cloud connection
+    
+    mosquitto_pub -h BROKER_IP -t roomba/particleCloud -m ENABLE
+    
+To disable cloud connection
+    
+    mosquitto_pub -h BROKER_IP -t roomba/particleCloud -m ENABLE
     
 ## Input commands
 Return value as integer in "return_value" field
