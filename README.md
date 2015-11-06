@@ -33,7 +33,8 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
 
 # Commands
 
-Commands can be sent either using MQTT protocol or using Particle API
+Commands can be sent either using MQTT protocol or using Particle API. 
+For details refer : https://github.com/OpHaCo/roomba_wifi/blob/master/doc/iRobot_Roomba_500_Open_Interface_Spec.pdf
 
 ## Control commands - as string
  * CMD_NAME = 
@@ -51,10 +52,11 @@ Commands can be sent either using MQTT protocol or using Particle API
     * VACUUMOFF
     * VIBGYOR   : leds
   
-  * GAINCONTROL
-  * FREECONTROL
-  * POWERON
-  * POWEROFF
+
+ * GAINCONTROL
+ * FREECONTROL
+ * POWERON
+ * POWEROFF
 
 ## Roomba control over particle API
 
@@ -90,7 +92,7 @@ To enable cloud connection
     
 To disable cloud connection
     
-    mosquitto_pub -h BROKER_IP -t roomba/particleCloud -m ENABLE
+    mosquitto_pub -h BROKER_IP -t roomba/particleCloud -m DISABLE
     
 ## Input commands
 Return value as integer in "return_value" field
