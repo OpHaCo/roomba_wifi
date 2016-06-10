@@ -1,11 +1,7 @@
 # About
 # =====
 #
-# Control a Spark Core remote control car with a bash script. Why not?
-#
-# Link to the SparkBot post on the Spark Community page belo:
-#
-# https://community.sparkdevices.com/t/sparkbot-manually-automatically-vacuum-your-living-room/625
+# Control a roomba vacuum cleaner from MQTT using a spark photon
 #
 # Install
 # -------
@@ -13,18 +9,7 @@
 # Add something like this to you bash profile:
 #
 
-#export SPARK_CORE_DEVICE_ID=
-#export SPARK_CORE_ACCESS_TOKEN=
-
-#     source ~/Downloads/spark_core_rc_car_bash_script.sh <<<- YOU WILL NEED TO CHANGE THIS!
-#
-# Source it:
-#
-#     source ~/.profile
-#
-# And Run
-#
-#     rc_while
+#export BROKER_IP=
 #
 # Commands:
 #
@@ -40,56 +25,59 @@ function rc_while() {
 }
  
 function rc() {
-  _base_command='curl https://api.spark.io/v1/devices/'"$SPARK_CORE_DEVICE_ID"'/roombaAPI -d access_token='"$SPARK_CORE_ACCESS_TOKEN"' -d "params=__CMD__"'
+  _command=''
+  
   case "$1" in
   8) echo "Forward march!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/FORWARD/')
+    _command="FORWARD"
      ;;
   2) echo "Come on back now"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/BACK/')
+    _command="BACK"
      ;;
-  4) echo "Hang a lu lu"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/LEFT/')
+  4) echo "Left"
+    _command="LEFT"
      ;;
-  6) echo "Hang a rubarb"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/RIGHT/')
+  6) echo "Right"
+    _command="RIGHT"
      ;;
   5) echo "Stop!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/STOP/')
+    _command="STOP"
      ;;
   e) echo "Play a song!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/SONG/')
+    _command="SONG"
      ;;   
   p) echo "Vacuum!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/VACUUMON/')
+    _command="VACUUMON"
      ;;    
   o) echo "No Vacuum!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/VACUUMOFF/')
+    _command="VACUUMOFF"
      ;;        
   l) echo "VIBGYOR!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/VIBGYOR/')
+    _command="VIBGYOR"
      ;;      
   h) echo "Go home, SparkBot!"
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/GOHOME/')
+    _command="GOHO%E"
      ;;
   g) echo "Mind control..."
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/GAINCONTROL/')
+    _command="GAINCONTROL"
      ;;
   z) echo "Free control..."
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/FREECONTROL/')
+    _command="FREECONTROL"
      ;;     
   c) echo "Clean..."
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/CLEAN/')
+    _command="CLEAN"
      ;;
   a) echo "Power..."
-    _command=$(echo "${_base_command}" | sed 's/__CMD__/POWER/')
+    _command="POWERON"
      ;;  
     
 
   *) echo "Don't know what to do with $1 : 8=forward, 2=back, 4=left, 6=right, 5=stop, e=song, p=vacuum on, o=vacuum off, l=leds, h=go home, g=full control mode, z=free control, c=clean, a=power"
+     return 
      ;;
   esac
- 
-  echo $_command
+  
+  _command="mosquitto_pub -h $BROKER_IP -t roomba/roombaCmds -m $_command" 
+  echo $_command 
   echo $_command | bash
 }

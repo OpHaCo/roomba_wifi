@@ -4,6 +4,7 @@ Resurrect your old Roomba! Add Wifi connectivity and control it from anyway!
 Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4home.inria.fr/ 
 
 # Prerequisities
+## hardware
  * Spark Core with latest firmware updates :
      
     ```
@@ -14,6 +15,9 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
  * OR spark photon with latest firmware https://github.com/spark/firmware/releases
 
  * Roomba - here model R3MOD24A - Unfortunately, commands can be sent to Roomba trew UART but INPUT commands are not received : no activity on Roomba Tx
+
+## software 
+ * MQTT broker - (do not use mosquitto 1.4.3 - https://github.com/hirotakaster/MQTT/issues/13 ) 
 
 # Setup
 ## hardware 
@@ -28,8 +32,6 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
 * After soldering it, roomba can be closed... Modification is now invisible. Photon led and buttons :
 
 <img src="https://raw.githubusercontent.com/Lahorde/roomba_wifi/master/img/roomba_hack_led.JPG" width="500">
-
-
 
 # Commands
 
@@ -120,6 +122,18 @@ ex :
       "connected": true,
       "return_value": 1
     }
+    
+# Test
+
+    export BROKER_IP=your_broker_ip
+    source ./roomba_control.sh
+    rc_while
+    
+# Experienced issues
+ * roomba credentials & keys lost when battery fully discharded :
+  * bug : http://community.particle.io/t/eeprom-persistence-issue/16514 - merged in firmware
+  * to solve it (when it blinks red and magenta after restoring wifi credentials) - use key doctor https://community.particle.io/t/photon-flashing-cyan-and-blinking-orange/21530/3
+  
     
 # References
  * https://community.particle.io/t/sparkbot-spark-core-roomba/625
