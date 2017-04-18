@@ -146,7 +146,6 @@ static TsControlCommandMap sToSControlCmds[] =
     {"VACUUMON",             &vacuumOn},
     {"VACUUMOFF",            &vacuumOff},
     {"VIBGYOR",              &vibgyor},
-    /** Add here other output commands */
 };
 
 /**********************************************
@@ -615,6 +614,11 @@ static int roombaControl(String command)
       if(inputCmds[cmdIndex].cmdName.equals(command))
       {
           setPassiveMode();
+          /** Flush input buffer */
+          while(SERIAL_ROOMBA_CMD_RX.available())
+          {
+            SERIAL_ROOMBA_CMD_RX.read();
+          }
           return inputCmds[cmdIndex].inputCmd();
       }
   }
