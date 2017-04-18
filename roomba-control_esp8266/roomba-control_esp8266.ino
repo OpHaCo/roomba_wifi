@@ -34,6 +34,7 @@
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include <SoftwareSerial.h>
 
 /**************************************************************************
  * Macros
@@ -42,21 +43,29 @@
 
 #define LOG_SERIAL Serial
 #define SERIAL_ROOMBA_CMD_TX Serial1
-/** Only TX on Serial1 can be used */
-#define SERIAL_ROOMBA_CMD_RX Serial
 
 /**************************************************************************
  * Manifest Constants
  **************************************************************************/
 static const char* _mqttRoombaCmdsTopic = "roomba/roombaCmds";
+static const char* _mqttRoombaInputTopic = "roomba/roombaInput";
 static const char* _mqttRoombaAliveTopic = "roomba/alive";
 static const char* _mqttRoombaName = "roomba";
 
-static const int _ddPin = D7;                                      // _ddPin controls clean button 
+static const int CLEAN_PIN = D7;                                      // CLEAN_PIN controls clean button 
+static const int SOFT_UART_RX = D1;                                   // Rx to communicate with roomba
+static const int SOFT_UART_TX = D2;                                   // Not used
 
-static const char* _ssid = "Bbox-DCE7FB";
-static const char* _password = "E38B00A177";
-static const char* _mqttServer = "192.168.1.86"; 
+/** Use software serial Rx - to communicate with roomba - otherwise, 
+ * on Rx impedance too high, logical 0 set by Roomba seen at 2.2V on Rx!
+ */
+static SoftwareSerial _softSerial(SOFT_UART_RX, SOFT_UART_TX);
+#define SERIAL_ROOMBA_CMD_RX _softSerial
+
+static const char* _ssid = "your_ssid";
+static const char* _password = "your_wifi_pass";
+static const char* _mqttServer = "mqtt_broker_address"; 
+
 /**************************************************************************
  * Type Definitions
  **************************************************************************/
@@ -137,6 +146,7 @@ static TsControlCommandMap sToSControlCmds[] =
     {"VACUUMON",             &vacuumOn},
     {"VACUUMOFF",            &vacuumOff},
     {"VIBGYOR",              &vibgyor},
+    /** Add here other output commands */
 };
 
 /**********************************************
@@ -148,6 +158,7 @@ static TsControlCommandMap cmds[] =
     {"POWEROFF",             &powerOff},
     {"FREECONTROL",          &freeControl},
     {"GAINCONTROL",          &gainControl}
+    /** Add here other output commands */
 };
 
 /**********************************************
@@ -157,6 +168,7 @@ static TsInputCommandMap inputCmds[] =
 {
     {"GETMODE",                (int (*)(void)) (&getMode)},
     {"GETBATT",                (int (*)(void)) (&getBatteryCharge)},
+    /** Add here other input commands */
 };
 
 
@@ -174,8 +186,9 @@ static bool _ledStatus = HIGH;
  **************************************************************************/
 void setup() {
   // Pinmode definitions and begin serial
-  pinMode(_ddPin, INPUT_PULLUP);                     // sets the pins as input
+  pinMode(CLEAN_PIN, INPUT_PULLUP);                     // sets the pins as input
   SERIAL_ROOMBA_CMD_TX.begin(115200);
+  SERIAL_ROOMBA_CMD_RX.begin(115200);
   LOG_SERIAL.begin(115200);
   LOG_SERIAL.println("start roomba control");
 
@@ -363,19 +376,18 @@ static void clean() {
 static void powerOn()
 {
     //GPIO connected to clean button
-    pinMode(_ddPin, OUTPUT);
-    digitalWrite(_ddPin, LOW);
+    pinMode(CLEAN_PIN, OUTPUT);
+    digitalWrite(CLEAN_PIN, LOW);
     delay(300);
-    pinMode(_ddPin, INPUT_PULLUP);
+    pinMode(CLEAN_PIN, INPUT_PULLUP);
 }
 
 static void powerOff()
 {
     //GPIO connected to clean button
-    pinMode(_ddPin, OUTPUT);
-    digitalWrite(_ddPin, LOW);
+    pinMode(CLEAN_PIN, OUTPUT);
+    digitalWrite(CLEAN_PIN, LOW);
     delay(2000);
-    pinMode(_ddPin, INPUT_PULLUP);
 }
 
 static void goHome() {                                     // Sends the Roomba back to it's charging base
@@ -491,6 +503,8 @@ static EIOMode getMode(void)
 {
   int8_t loc_readByte = 0;
   
+  /** Get sensor packet */ 
+  SERIAL_ROOMBA_CMD_TX.write(142);
   SERIAL_ROOMBA_CMD_TX.write(35);
 
   if(readByte(loc_readByte, 100) == NO_BYTE_READ)
@@ -500,6 +514,9 @@ static EIOMode getMode(void)
   else
   {
       /** +1 increment... in order to not returining 0 */
+      if (!_mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte + 1).c_str())) {
+        LOG_SERIAL.println("Publish failed");
+      }
       return  (EIOMode)(loc_readByte + 1);
   }
 }
@@ -509,16 +526,22 @@ static uint16_t getBatteryCharge()
   int8_t loc_readByte = 0;
   uint16_t battLevel = 0;
   
+  /** Get sensor packet */ 
+  SERIAL_ROOMBA_CMD_TX.write(142);
   SERIAL_ROOMBA_CMD_TX.write(25);
 
   if(readByte(loc_readByte, 50) == NO_BYTE_READ)
   {
       return -1;
   }
+  
   battLevel = loc_readByte << 8;
-    if(readByte(loc_readByte, 50) == NO_BYTE_READ)
+  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
   {
       return -1;
+  }
+  else if (!_mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte + battLevel).c_str())) {
+    LOG_SERIAL.println("Publish failed");
   }
   return loc_readByte + battLevel;
 }

@@ -368,6 +368,8 @@ EIOMode getMode(void)
 {
   int8_t loc_readByte = 0;
   
+  /** Get sensor packet */ 
+  Serial1.write(142);
   Serial1.write(35);
 
   if(readByte(loc_readByte, 100) == NO_BYTE_READ)
@@ -386,6 +388,8 @@ uint16_t getBatteryCharge()
   int8_t loc_readByte = 0;
   uint16_t battLevel = 0;
   
+  /** Get sensor packet */ 
+  Serial1.write(142);
   Serial1.write(25);
 
   if(readByte(loc_readByte, 50) == NO_BYTE_READ)

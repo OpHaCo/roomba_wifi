@@ -5,15 +5,17 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
 
 # Prerequisities
 ## hardware
- * Spark Core with latest firmware updates :
+ * ESP8266 
+     
+ * or Spark Core with latest firmware updates :
      
     ```
     sudo particle flash --usb cc3000
     sudo particle flash --usb deep_update_2014_06
     ```
-    
  * OR spark photon with latest firmware https://github.com/spark/firmware/releases
 
+     
  * Roomba - here model R3MOD24A - Unfortunately, commands can be sent to Roomba trew UART but INPUT commands are not received : no activity on Roomba Tx
 
 ## software 
@@ -21,6 +23,10 @@ Project has been done in Amiqual4Home Equipex Creativity Lab - https://amiqual4h
 
 # Setup
 ## hardware 
+### ESP8266 
+TODO - Refer code to get pinout
+
+### Particle
 * For this model, no input on external connector can be used to wake up roomba. Clean button is configured in pullup, when pressed it is grounded through 1k resistor. Connecting button input to D0 through 8k resistor gives control on it. 
 
 <img src="https://raw.githubusercontent.com/Lahorde/roomba_wifi/master/img/roomba_hack_0.JPG" width="500">
@@ -86,8 +92,9 @@ In this topic, payload containing command name must be sent,
 e.g :
 
     mosquitto_pub -h BROKER_IP -t roomba/roombaCmds -m SONG
+    mosquitto_pub -h BROKER_IP -t roomba/roombaCmds -m GETBATT 
  
-#### "roomba/particleCloud" : roomba cloud connection
+#### Particle specific : "roomba/particleCloud" : roomba cloud connection
 To enable cloud connection
     
     mosquitto_pub -h BROKER_IP -t roomba/particleCloud -m ENABLE
@@ -103,6 +110,8 @@ Return value as integer in "return_value" field
    * AFTER THESE COMMANDS ROOMBA IS IN PASSIVE MODE
      * GETMODE 
       * return value
+     * GETBATT 
+      * return value
     
     ```
     1 OFF
@@ -113,6 +122,14 @@ Return value as integer in "return_value" field
      * GETMODE 
       * return value : current roomba charge in mAh
       
+### Return
+#### MQTT
+
+Subscribe to this topic to get Input commands returns :
+
+    mosquittto_sub -h BROKER_IP -t roomba/roombaInput
+
+#### Particle
 ex :
 
     curl https://api.spark.io/v1/devices/SPARK_CORE_ID/roombaAPI -d access_token='YOUR_TOKEN' -d "params=GETMODE"
@@ -133,12 +150,12 @@ ex :
  * roomba credentials & keys lost when battery fully discharded :
   * bug : http://community.particle.io/t/eeprom-persistence-issue/16514 - merged in firmware
   * to solve it (when it blinks red and magenta after restoring wifi credentials) - use key doctor https://community.particle.io/t/photon-flashing-cyan-and-blinking-orange/21530/3
+
+ * impedance issue on Roomba TX - in some cases, input impedance of pin connected to Roomba Rx causes input commands are note received. To solve it we used a nodemcu with a software UART Rx pin. Hadware UART0, Serial Rx has a too high impedance.
+      
   
     
 # References
  * https://community.particle.io/t/sparkbot-spark-core-roomba/625
  * https://community.particle.io/t/getting-mac-address-of-unconnected-core/8473/5
  * http://blog.particle.io/2014/08/06/control-the-connection/
-
-# TODO
- * get another Roomba to handle input commands! 
