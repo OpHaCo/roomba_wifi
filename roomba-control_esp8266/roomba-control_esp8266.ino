@@ -467,7 +467,6 @@ static void clean() {
     }                           //End if
 
   }                     //End while
-  
 */
 }
 
