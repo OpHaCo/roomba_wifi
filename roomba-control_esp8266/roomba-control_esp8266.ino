@@ -62,9 +62,9 @@ static const int SOFT_UART_TX = D2;                                   // Not use
 static SoftwareSerial _softSerial(SOFT_UART_RX, SOFT_UART_TX);
 #define SERIAL_ROOMBA_CMD_RX _softSerial
 
-static const char* _ssid = "your_ssid";
-static const char* _password = "your_wifi_pass";
-static const char* _mqttServer = "mqtt_broker_address"; 
+static const char* _ssid = "A4H_creativity_lab";
+static const char* _password = "Toutes ces machines pour fabriquer!";
+static const char* _mqttServer = "192.168.132.72"; 
 
 /**************************************************************************
  * Type Definitions
@@ -97,29 +97,53 @@ typedef struct{
 static void connectMQTT(void);
 static void setupWifi(void);
 static void setupOTA(void);
+
+static void stop();
 static void goForward();
 static void goBackward();
 static void spinLeft();
 static void spinRight();
-static void stop();
-static void updateSensors();
-static void playSong();
-static void vibgyor();
+
 static void vacuumOn();
 static void vacuumOff();
+static void playSong();
+static void Leds();
+static void writeDock();
+
 static void goHome();
 static void clean();
 static void powerOn();
 static void powerOff();
+
 static void gainControl();
 static void setPassiveMode();
 static void setSafeMode();
 static void freeControl();
+
 static EIOMode getMode(void);
 static uint16_t getBatteryCharge(void);
-static int readByte(int8_t& readByte, int timeout);
+static uint8_t getInfra(void);
+static int16_t getDistance(void);
+static int16_t getAngle(void);
+static uint8_t getBumper(void);
+
+static int16_t getPacket(uint8_t ID, uint8_t TwoBytes);
+static uint8_t readByte(int8_t& readByte, int timeout);
+
 static int roombaControl(String command);
 static void mqttCallback(char* topic, byte* payload, unsigned int length);
+
+/**********************************************
+ * FOR THESE COMMANDS NO MODE REQUIRED
+ *********************************************/ 
+static TsControlCommandMap cmds[] = 
+{
+    {"POWERON",              &powerOn},
+    {"POWEROFF",             &powerOff},
+    {"FREECONTROL",          &freeControl},
+    {"GAINCONTROL",          &gainControl}
+    /** Add here other output commands */
+};
 
 /*********************************************************
  * COMMANDS REQUIRING AT LEAST PASSIVE MODE - AFTER 
@@ -138,25 +162,16 @@ static TsControlCommandMap pToPControlCmds[] =
 static TsControlCommandMap sToSControlCmds[] = 
 {
     {"STOP",                 &stop},
-    {"BACK",                 &goBackward},
+    {"BACKWARD",             &goBackward},
     {"FORWARD",              &goForward},
     {"RIGHT",                &spinRight},
     {"LEFT",                 &spinLeft},
-    {"SONG",                 &playSong},
+    
     {"VACUUMON",             &vacuumOn},
-    {"VACUUMOFF",            &vacuumOff},
-    {"VIBGYOR",              &vibgyor},
-};
-
-/**********************************************
- * FOR THESE COMMANDS NO MODE REQUIRED
- *********************************************/ 
-static TsControlCommandMap cmds[] = 
-{
-    {"POWERON",              &powerOn},
-    {"POWEROFF",             &powerOff},
-    {"FREECONTROL",          &freeControl},
-    {"GAINCONTROL",          &gainControl}
+    {"VACUUMOFF",            &vacuumOff},    
+    {"SONG",                 &playSong},
+    {"LED",                  &Leds},
+    {"WDOCK",                &writeDock},
     /** Add here other output commands */
 };
 
@@ -167,6 +182,10 @@ static TsInputCommandMap inputCmds[] =
 {
     {"GETMODE",                (int (*)(void)) (&getMode)},
     {"GETBATT",                (int (*)(void)) (&getBatteryCharge)},
+    {"GETINFRA",               (int (*)(void)) (&getInfra)},
+    {"GETBUMPER",              (int (*)(void)) (&getBumper)},
+    {"GETDISTANCE",            (int (*)(void)) (&getDistance)},
+    {"GETANGLE",               (int (*)(void)) (&getAngle)},
     /** Add here other input commands */
 };
 
@@ -220,7 +239,7 @@ void loop() {
 }
 
  /**************************************************************************
- * Local Functions Definitions
+ * SETUP
  **************************************************************************/
 static void connectMQTT(void)
 {
@@ -230,8 +249,7 @@ static void connectMQTT(void)
   LOG_SERIAL.println(_mqttRoombaName);
 
   _ledStatus = HIGH;
-  digitalWrite(LED_BUILTIN, _ledStatus);
-
+  digitalWrite(LED_BUILTIN, _ledStatus); 
   while (true)
   {
     if (_mqttClient.connect(_mqttRoombaName)) {
@@ -327,151 +345,12 @@ static void setupOTA(void)
   });
   ArduinoOTA.begin();
   LOG_SERIAL.println("OTA initialized");
-  
 }
 
-static void stop() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0 means stop
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x80);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-}
 
-static void goForward() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x01F4 = 500 = full speed ahead!
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xF4);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xF9);              // Our roomba has a limp, so it this correction keeps it straight
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xC0);
-
-}
-static void goBackward() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xff38 == -200
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x38);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x80);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-}
-static void spinLeft() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x0001 == 1 == spin left
-}
-static void spinRight() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xffff == -1 == spin right
-}
-
-static void clean() {                                      
-  SERIAL_ROOMBA_CMD_TX.write(135);                               // Starts a cleaning cycle, so command 143 can be initiated
-}
-
-static void powerOn()
-{
-    //GPIO connected to clean button
-    pinMode(CLEAN_PIN, OUTPUT);
-    digitalWrite(CLEAN_PIN, LOW);
-    delay(300);
-    pinMode(CLEAN_PIN, INPUT_PULLUP);
-}
-
-static void powerOff()
-{
-    //GPIO connected to clean button
-    pinMode(CLEAN_PIN, OUTPUT);
-    digitalWrite(CLEAN_PIN, LOW);
-    delay(2000);
-}
-
-static void goHome() {                                     // Sends the Roomba back to it's charging base
-  //clean();                                          // Starts a cleaning cycle, so command 143 can be initiated
-  //delay(5000);
-  SERIAL_ROOMBA_CMD_TX.write(143);                               // Sends the Roomba home to charge
-  delay(50);
-}
-
-static void playSong() {                                   // Makes the Roomba play a little ditty
-  SERIAL_ROOMBA_CMD_TX.write(140);                         	    // Define a new song
-  SERIAL_ROOMBA_CMD_TX.write(0);                                 // Write to song slot #0
-  SERIAL_ROOMBA_CMD_TX.write(8);                                 // 8 notes long
-  SERIAL_ROOMBA_CMD_TX.write(60);                                // Everything below defines the C Major scale 
-  SERIAL_ROOMBA_CMD_TX.write(32); 
-  SERIAL_ROOMBA_CMD_TX.write(62);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(64);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(65);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(67);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(69);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(71);
-  SERIAL_ROOMBA_CMD_TX.write(32);
-  SERIAL_ROOMBA_CMD_TX.write(72);
-  SERIAL_ROOMBA_CMD_TX.write(32);
- 
-  SERIAL_ROOMBA_CMD_TX.write(141);                               // Play a song
-  SERIAL_ROOMBA_CMD_TX.write(0);                                 // Play song slot #0
-}
-
-static void vacuumOn() {                                   // Turns on the vacuum
-  SERIAL_ROOMBA_CMD_TX.write(138);
-  SERIAL_ROOMBA_CMD_TX.write(7);
-}
-
-static void vacuumOff() {                                  // Turns off the vacuum
-  SERIAL_ROOMBA_CMD_TX.write(138);
-  SERIAL_ROOMBA_CMD_TX.write(0);
-}
-
-static void vibgyor() {                                    // Makes the main LED behind the power button on the Roomba pulse from Green to Red
-  SERIAL_ROOMBA_CMD_TX.write(139);
-  
-  for (int i=0;i<255;i++){ 
-    SERIAL_ROOMBA_CMD_TX.write(139);                             // LED seiral command
-    SERIAL_ROOMBA_CMD_TX.write(0);                               // We don't want any of the other LEDs
-    SERIAL_ROOMBA_CMD_TX.write(i);                               // Color dependent on i
-    SERIAL_ROOMBA_CMD_TX.write(255);                             // FULL INTENSITY!
-    delay(5);                                       // Wait between cycles so the transition is visible
-    }
-
-  for (int i=0;i<255;i++){ 
-    SERIAL_ROOMBA_CMD_TX.write(139);
-    SERIAL_ROOMBA_CMD_TX.write(0);
-    SERIAL_ROOMBA_CMD_TX.write(i);
-    SERIAL_ROOMBA_CMD_TX.write(255);
-    delay(5);
-    }
-
-  for (int i=0;i<255;i++){ 
-    SERIAL_ROOMBA_CMD_TX.write(139);
-    SERIAL_ROOMBA_CMD_TX.write(0);
-    SERIAL_ROOMBA_CMD_TX.write(i);
-    SERIAL_ROOMBA_CMD_TX.write(255);
-    delay(5);
-    }
-
-  for (int i=0;i<255;i++){ 
-    SERIAL_ROOMBA_CMD_TX.write(139);
-    SERIAL_ROOMBA_CMD_TX.write(0);
-    SERIAL_ROOMBA_CMD_TX.write(i);
-    SERIAL_ROOMBA_CMD_TX.write(255);
-    delay(5);
-    }
-
-  SERIAL_ROOMBA_CMD_TX.write(139);
-  SERIAL_ROOMBA_CMD_TX.write(0);
-  SERIAL_ROOMBA_CMD_TX.write(0);
-  SERIAL_ROOMBA_CMD_TX.write(0);
-
-}
+ /**************************************************************************
+ * MODE SELECTION
+ **************************************************************************/
 
 static void gainControl() {                                // Gain control of the Roomba once it's gone back into passive mode
   setSafeMode();
@@ -491,61 +370,326 @@ static void setSafeMode() {                                // Gain control of th
   delay(50);  
 }
 
-static void freeControl()
-{
+static void freeControl() {
   // Get the Roomba into control mode 
   SERIAL_ROOMBA_CMD_TX.write(128);                               // Passive mode
   delay(50);
 }
 
+ /**************************************************************************
+ * MOVING COMMANDS
+ **************************************************************************/
+
+static void stop() {
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0 means stop
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x80);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
+}
+
+static void goForward() {
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x01F4 = 500 = full speed ahead!
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xF4);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xF9);              // Our roomba has a limp, so it this correction keeps it straight
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xC0);
+}
+
+static void goBackward() {
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xff38 == -200
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x38);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x80);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
+}
+
+static void spinLeft() {
+  int16_t sum = 0;
+  
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x0001 == 1 == spin left
+/*
+  while sum < degres
+  {
+    delay(100);  //Wait 100 millisecondes
+    sum += getAngle();
+  }*/
+}
+
+static void spinRight() {
+  int16_t sum = 0;
+  
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xffff == -1 == spin right
+/*
+  while sum > degres
+  {
+    delay(100);  //Wait 100 millisecondes
+    sum += getAngle();
+  }*/
+}
+
+static void clean() {                                      
+  SERIAL_ROOMBA_CMD_TX.write(135);                               // Starts a cleaning cycle, so command 143 can be initiated
+
+/*
+  //Start from home base
+  
+  goBackward();   //Backward
+  delay(3000);    //Wait 3 secondes
+  spinRight();    //Turn Right 
+  delay(1500);    //Wait 1,5 secondes (~180°)
+
+  getDistance();  //Reset distance
+  getAngle();     //Reset angle
+
+  while (getPacket(15,0) < 200) && (getPacket(26,1) > 8000) //&& (no other commands)   //While (low dirt level) and (high bettery level) and (no other commands)
+
+    if getPacket(8,0) == 1  //if wall seen
+      goForward();      //Forward slow speed
+    else
+      goForward();      //Forward full speed
+    
+    if bump or stares   //If (bump) or (stares) detected
+    {
+      stop();                   //STOP
+      Module = getDistance();   //Get distance
+      delay(random(500,1500));  //Wait rondomly for rotate randomly
+      stop();                   //STOP
+      Argument = getAngle();    //Get Angle
+    }                           //End if
+
+  }                     //End while
+  
+*/
+}
+
+static void powerOn()
+{
+    //GPIO connected to clean button
+    pinMode(CLEAN_PIN, OUTPUT);
+    digitalWrite(CLEAN_PIN, LOW);
+    delay(300);
+    pinMode(CLEAN_PIN, INPUT_PULLUP);
+}
+
+static void powerOff()
+{
+    //GPIO connected to clean button
+    pinMode(CLEAN_PIN, OUTPUT);
+    digitalWrite(CLEAN_PIN, LOW);
+    delay(2000);
+}
+
+
+static void goHome() {                                     // Sends the Roomba back to it's charging base
+  SERIAL_ROOMBA_CMD_TX.write(143);                               // Sends the Roomba home to charge
+  delay(50);
+
+/*
+  //Get vector to go docking zone (distance and degrees)
+  //Turn 
+  //Dock
+*/
+}
+
+ /**************************************************************************
+ * OTHER COMMANDS
+ **************************************************************************/
+
+static void vacuumOn() {                                   // Turns on the vacuum
+  SERIAL_ROOMBA_CMD_TX.write(138);
+  SERIAL_ROOMBA_CMD_TX.write(7);
+}
+
+static void vacuumOff() {                                  // Turns off the vacuum
+  SERIAL_ROOMBA_CMD_TX.write(138);
+  SERIAL_ROOMBA_CMD_TX.write(0);
+}
+
+static void playSong() {                                    // Makes the Roomba play a little ditty call "Elise's letter"
+  SERIAL_ROOMBA_CMD_TX.write(140);                          // Define a new song
+  SERIAL_ROOMBA_CMD_TX.write(0);                            // Write to song slot #0
+  SERIAL_ROOMBA_CMD_TX.write(17);                           // 17 notes long
+  /* NOTES */
+  SERIAL_ROOMBA_CMD_TX.write(76);           
+  SERIAL_ROOMBA_CMD_TX.write(16); 
+  SERIAL_ROOMBA_CMD_TX.write(74);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(76);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(74);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(76);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(71);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(74);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(72);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(69);
+  SERIAL_ROOMBA_CMD_TX.write(48);
+
+  SERIAL_ROOMBA_CMD_TX.write(60);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(64);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(69);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(71);
+  SERIAL_ROOMBA_CMD_TX.write(48);
+
+  SERIAL_ROOMBA_CMD_TX.write(64);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(68);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(71);
+  SERIAL_ROOMBA_CMD_TX.write(16);
+  SERIAL_ROOMBA_CMD_TX.write(72);
+  SERIAL_ROOMBA_CMD_TX.write(48);
+  
+  SERIAL_ROOMBA_CMD_TX.write(141);                               // Play a song
+  SERIAL_ROOMBA_CMD_TX.write(0);                                 // Play song slot #0
+  
+  _mqttClient.publish("myTopic", "myMessage");
+}
+
+static void Leds() {                                    // Makes the main LED behind the power button on the Roomba pulse from Green to Red
+  SERIAL_ROOMBA_CMD_TX.write(139);
+  
+  for (int i=0;i<255;i++){ 
+    SERIAL_ROOMBA_CMD_TX.write(139);                              // LED seiral command
+    SERIAL_ROOMBA_CMD_TX.write(15);                               // All LEDs
+    SERIAL_ROOMBA_CMD_TX.write(i);                                // Color dependent on i
+    SERIAL_ROOMBA_CMD_TX.write(255);                              // FULL INTENSITY!
+    delay(5);                                       // Wait between cycles so the transition is visible
+    }
+
+  SERIAL_ROOMBA_CMD_TX.write(139);
+  SERIAL_ROOMBA_CMD_TX.write(0);
+  SERIAL_ROOMBA_CMD_TX.write(0);
+  SERIAL_ROOMBA_CMD_TX.write(0);
+}
+
+static void writeDock() {
+  SERIAL_ROOMBA_CMD_TX.write(163);
+  SERIAL_ROOMBA_CMD_TX.write(124);                        //'d'
+  SERIAL_ROOMBA_CMD_TX.write(92);                         //'o'
+  SERIAL_ROOMBA_CMD_TX.write(88);                         //'c'
+  SERIAL_ROOMBA_CMD_TX.write(86);                         //'k'
+}
+
+ /**************************************************************************
+ * PACKET COMMANDS
+ **************************************************************************/
+
 static EIOMode getMode(void)
 {
-  int8_t loc_readByte = 0;
+  uint8_t loc_readByte = 0;
+  loc_readByte = (uint8_t)getPacket(35,0);     //Get the packet number 35 (Mode) 1 byte unsigned
   
-  /** Get sensor packet */ 
-  SERIAL_ROOMBA_CMD_TX.write(142);
-  SERIAL_ROOMBA_CMD_TX.write(35);
-
-  if(readByte(loc_readByte, 100) == NO_BYTE_READ)
-  {
-      return (EIOMode)-1;
-  }
-  else
-  {
-      /** +1 increment... in order to not returining 0 */
-      if (!_mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte + 1).c_str())) {
-        LOG_SERIAL.println("Publish failed");
-      }
-      return  (EIOMode)(loc_readByte + 1);
-  }
+  _mqttClient.publish(_mqttRoombaInputTopic, "Mode : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
+  
+  return (EIOMode)loc_readByte;
 }
 
 static uint16_t getBatteryCharge()
 {
-  int8_t loc_readByte = 0;
-  uint16_t battLevel = 0;
-  
-  /** Get sensor packet */ 
-  SERIAL_ROOMBA_CMD_TX.write(142);
-  SERIAL_ROOMBA_CMD_TX.write(25);
+  uint16_t loc_readByte = 0;
+  loc_readByte = (uint16_t)getPacket(25,1);     //Get the packet number 25 (Battery Level) 2 bytes unsigned
 
-  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
-  {
-      return -1;
-  }
+  _mqttClient.publish(_mqttRoombaInputTopic, "Battery Charge (mAh) : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
   
-  battLevel = loc_readByte << 8;
-  if(readByte(loc_readByte, 50) == NO_BYTE_READ)
-  {
-      return -1;
-  }
-  else if (!_mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte + battLevel).c_str())) {
-    LOG_SERIAL.println("Publish failed");
-  }
-  return loc_readByte + battLevel;
+  return loc_readByte;
 }
 
-static int readByte(int8_t& readByte, int timeout)
+static uint8_t getInfra(void)
+{
+  uint8_t loc_readByte = 0;
+  loc_readByte = (uint8_t)getPacket(52,0);     //Get the packet number 52 (Infrared Left) 1 byte unsigned
+
+  _mqttClient.publish(_mqttRoombaInputTopic, "Infra Left : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
+  
+  return loc_readByte;
+}
+
+static int16_t getDistance(void)
+{
+  int16_t loc_readByte = 0;
+  loc_readByte = (int16_t)getPacket(19,1);     //Get the packet number 19 (Distance) 2 bytes signed
+
+  _mqttClient.publish(_mqttRoombaInputTopic, "Distance (mm) : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
+  
+  return loc_readByte;
+}
+
+static int16_t getAngle(void)
+{
+  int16_t loc_readByte = 0;
+  loc_readByte = (int16_t)getPacket(20,1);     //Get the packet number 19 (Distance) 2 bytes signed
+
+  _mqttClient.publish(_mqttRoombaInputTopic, "Angle (degres) : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
+  
+  return loc_readByte;
+}
+
+static uint8_t getBumper(void)
+{
+  uint8_t loc_readByte = 0;
+  loc_readByte = (uint8_t)getPacket(45,0);     //Get the packet number 45 (Light Bumper) 1 byte unsigned
+
+  _mqttClient.publish(_mqttRoombaInputTopic, "Bumper : ");
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_readByte).c_str());
+  
+  return loc_readByte;
+}
+
+ /**************************************************************************
+ * SEND PACKET
+ **************************************************************************/
+
+static int16_t getPacket(uint8_t ID, uint8_t TwoBytes)
+{
+  int8_t loc_Byte_H = 0,loc_Byte_L = 0;
+  
+  SERIAL_ROOMBA_CMD_TX.write(142);
+  SERIAL_ROOMBA_CMD_TX.write(ID);
+
+  if(TwoBytes != 0)  //if two bytes to read
+  {
+    if(readByte(loc_Byte_H, 50) == NO_BYTE_READ)   //Read the first byte end if no byte is read
+      return -1;                                    //Return error code
+  }
+  
+  if(readByte(loc_Byte_L, 50) == NO_BYTE_READ)      //Read the byte end if no byte is read
+      return -1;                                    //Return error code
+  
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_Byte_H,BIN).c_str());
+  _mqttClient.publish(_mqttRoombaInputTopic, String(loc_Byte_L,BIN).c_str());
+  _mqttClient.publish(_mqttRoombaInputTopic, String(((loc_Byte_H << 8) | loc_Byte_L),BIN).c_str());
+  _mqttClient.publish(_mqttRoombaInputTopic, String((loc_Byte_H << 8) | loc_Byte_L).c_str());
+  
+  return ((loc_Byte_H << 8) | loc_Byte_L);
+}
+
+ /**************************************************************************
+ * READ BYTE
+ **************************************************************************/
+
+static uint8_t readByte(int8_t& readByte, int timeout)
 {
   int count = 0;
   const uint8_t DELAY = 10;
@@ -563,13 +707,14 @@ static int readByte(int8_t& readByte, int timeout)
   }
   return NO_BYTE_READ;
 }
-
+ 
+ /**************************************************************************
+ * HANDLE COMMANDS NOT REQUIRING ANY MODE
+ **************************************************************************/
+   
 static int roombaControl(String command)
 {
   int cmdIndex = 0;    
-  /****************************************************
-   * HANDLE COMMANDS NOT REQUIRING ANY MODE
-   * *************************************************/
   for(cmdIndex = 0; cmdIndex < sizeof(cmds)/sizeof(cmds[0]); cmdIndex++)
   {
       if(cmds[cmdIndex].cmdName.equals(command))
@@ -614,11 +759,6 @@ static int roombaControl(String command)
       if(inputCmds[cmdIndex].cmdName.equals(command))
       {
           setPassiveMode();
-          /** Flush input buffer */
-          while(SERIAL_ROOMBA_CMD_RX.available())
-          {
-            SERIAL_ROOMBA_CMD_RX.read();
-          }
           return inputCmds[cmdIndex].inputCmd();
       }
   }
