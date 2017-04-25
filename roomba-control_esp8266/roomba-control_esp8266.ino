@@ -121,7 +121,10 @@ static void setSafeMode();
 static void freeControl();
 
 static EIOMode getMode(void);
-static uint16_t getBatteryCharge(void);
+static uint16_t getBattery(void);
+static bool getFull(void);
+static bool getWall(void);
+static uint8_t getCliff(void);
 static uint8_t getOmniInfra(void);
 static uint8_t getLeftInfra(void);
 static uint8_t getRightInfra(void);
@@ -185,7 +188,11 @@ static TsControlCommandMap sToSControlCmds[] =
 static TsInputCommandMap inputCmds[] = 
 {
     {"GETMODE",                (int (*)(void)) (&getMode)},
-    {"GETBATT",                (int (*)(void)) (&getBatteryCharge)},
+    {"GETBATT",                (int (*)(void)) (&getBattery)},
+    
+    {"GETFULL",                (int (*)(void)) (&getFull)},
+    {"GETWALL",                (int (*)(void)) (&getWall)},
+    {"GETCLIFF",               (int (*)(void)) (&getCliff)},
     {"GETOINFRA",              (int (*)(void)) (&getOmniInfra)},
     {"GETLINFRA",              (int (*)(void)) (&getLeftInfra)},
     {"GETRINFRA",              (int (*)(void)) (&getRightInfra)},
@@ -389,26 +396,26 @@ static void freeControl() {
  **************************************************************************/
 
 static void stop() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0 means stop
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);                //DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);               //0 velocity
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x80);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);               //0 Radius
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
 }
 
 static void goForward() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x01F4 = 500 = full speed ahead!
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);                //DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);     //0x01F4 = 500 = full speed ahead!
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xF4);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // Our roomba has a limp, so it this correction keeps it straight
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);     //0 Radius
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
 }
 
 static void goBackward() {
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xff0c == -500
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);      // DRIVE command
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);     // 0xff0c == -500
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x0c);
-  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
+  SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);     //0 Radius
   SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
 }
 
@@ -418,12 +425,12 @@ static void spinLeft() {
 
   while (sum < degres)
   {
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);    // DRIVE command
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);   // 0x00c8 == 200
     SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              // 0x0001 == 1 == spin left
-    delay(100);                 //Wait 100 millisecondes
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);   // 0x0001 == 1 == spin left
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x01);              
+    delay(100);                                         //Wait 100 millisecondes
     sum += getAngle();
   }
 }
@@ -434,12 +441,12 @@ static void spinRight() {
 
   while (sum > degres)
   {  
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);               // DRIVE command
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);              // 0x00c8 == 200
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 137);              // DRIVE command
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0x00);             // 0x00c8 == 200
     SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xc8);
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);
-    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);              // 0xffff == -1 == spin right
-    delay(100);                   //Wait 100 millisecondes
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);             // 0xffff == -1 == spin right
+    SERIAL_ROOMBA_CMD_TX.write((unsigned char) 0xff);             
+    delay(100);                                                   //Wait 100 millisecondes
     sum += getAngle();
   }
 }
@@ -458,7 +465,7 @@ static void clean() {
   getDistance();  //Reset distance
   getAngle();     //Reset angle
 
-  while (getPacket(15,0) < 200) && (getPacket(26,1) > 8000) //&& (no other commands)   //While (low dirt level) and (high bettery level) and (no other commands)
+  while (getFull == LOW) && (getBatteryCharge() > 8000) //&& (no other commands)   //While (Dirt collector not full) and (high bettery level) and (no other commands)
 
     if getPacket(8,0) == 1  //if wall seen
       goForward();      //Forward slow speed
@@ -496,13 +503,16 @@ static void powerOff()
 }
 
 
-static void goHome() {                                     // Sends the Roomba back to it's charging base
-  SERIAL_ROOMBA_CMD_TX.write(143);                               // Sends the Roomba home to charge
+static void goHome() {                // Sends the Roomba back to it's charging base
+  SERIAL_ROOMBA_CMD_TX.write(143);    // Sends the Roomba home to charge
   delay(50);
 
 /*
   //Get vector to go docking zone (distance and degrees)
-  //Turn 
+  //Turn
+  //Stop
+  //Forward
+  //Stop
   //Dock
 */
 }
@@ -511,20 +521,20 @@ static void goHome() {                                     // Sends the Roomba b
  * OTHER COMMANDS
  **************************************************************************/
 
-static void vacuumOn() {                                   // Turns on the vacuum
+static void vacuumOn() {            // Turns on the vacuum
   SERIAL_ROOMBA_CMD_TX.write(138);
   SERIAL_ROOMBA_CMD_TX.write(7);
 }
 
-static void vacuumOff() {                                  // Turns off the vacuum
+static void vacuumOff() {           // Turns off the vacuum
   SERIAL_ROOMBA_CMD_TX.write(138);
   SERIAL_ROOMBA_CMD_TX.write(0);
 }
 
-static void playSong() {                                    // Makes the Roomba play a little ditty call "Elise's letter"
-  SERIAL_ROOMBA_CMD_TX.write(140);                          // Define a new song
-  SERIAL_ROOMBA_CMD_TX.write(0);                            // Write to song slot #0
-  SERIAL_ROOMBA_CMD_TX.write(17);                           // 17 notes long
+static void playSong() {            // Makes the Roomba play a little ditty call "Elise's letter"
+  SERIAL_ROOMBA_CMD_TX.write(140);  // Define a new song
+  SERIAL_ROOMBA_CMD_TX.write(0);    // Write to song slot #0
+  SERIAL_ROOMBA_CMD_TX.write(17);   // 17 notes long
   /* NOTES */
   SERIAL_ROOMBA_CMD_TX.write(76);           
   SERIAL_ROOMBA_CMD_TX.write(16); 
@@ -563,19 +573,19 @@ static void playSong() {                                    // Makes the Roomba 
   SERIAL_ROOMBA_CMD_TX.write(72);
   SERIAL_ROOMBA_CMD_TX.write(48);
   
-  SERIAL_ROOMBA_CMD_TX.write(141);                               // Play a song
-  SERIAL_ROOMBA_CMD_TX.write(0);                                 // Play song slot #0
+  SERIAL_ROOMBA_CMD_TX.write(141);  //Play a song
+  SERIAL_ROOMBA_CMD_TX.write(0);    //Play song slot #0
 }
 
-static void Leds() {                                    // Makes the main LED behind the power button on the Roomba pulse from Green to Red
+static void Leds() {                //Makes the main LED behind the power button on the Roomba pulse from Green to Red
   SERIAL_ROOMBA_CMD_TX.write(139);
   
   for (int i=0;i<255;i++){ 
-    SERIAL_ROOMBA_CMD_TX.write(139);                              // LED seiral command
-    SERIAL_ROOMBA_CMD_TX.write(15);                               // All LEDs
-    SERIAL_ROOMBA_CMD_TX.write(i);                                // Color dependent on i
-    SERIAL_ROOMBA_CMD_TX.write(255);                              // FULL INTENSITY!
-    delay(5);                                       // Wait between cycles so the transition is visible
+    SERIAL_ROOMBA_CMD_TX.write(139);  //LED serial command
+    SERIAL_ROOMBA_CMD_TX.write(15);   //All LEDs
+    SERIAL_ROOMBA_CMD_TX.write(i);    //Color dependent on i
+    SERIAL_ROOMBA_CMD_TX.write(255);  //FULL INTENSITY!
+    delay(5);                         //Wait between cycles so the transition is visible
     }
 
   SERIAL_ROOMBA_CMD_TX.write(139);
@@ -585,11 +595,11 @@ static void Leds() {                                    // Makes the main LED be
 }
 
 static void writeDock() {
-  SERIAL_ROOMBA_CMD_TX.write(163);
-  SERIAL_ROOMBA_CMD_TX.write(124);                        //'d'
-  SERIAL_ROOMBA_CMD_TX.write(92);                         //'o'
-  SERIAL_ROOMBA_CMD_TX.write(88);                         //'c'
-  SERIAL_ROOMBA_CMD_TX.write(86);                         //'k'
+  SERIAL_ROOMBA_CMD_TX.write(163);  //Write on the clock
+  SERIAL_ROOMBA_CMD_TX.write(124);  //'d'
+  SERIAL_ROOMBA_CMD_TX.write(92);   //'o'
+  SERIAL_ROOMBA_CMD_TX.write(88);   //'c'
+  SERIAL_ROOMBA_CMD_TX.write(86);   //'k'
 }
 
  /**************************************************************************
@@ -600,8 +610,34 @@ static EIOMode getMode(void) {            //Get battery mode
   return (EIOMode)getPacket(35,LOW);      //Get the packet number 35 (Mode) 1 byte unsigned
 }
 
-static uint16_t getBatteryCharge() {      //Get battery charge in 
-  return (uint16_t)getPacket(25,HIGH);    //Get the packet number 25 (Battery Level) 2 bytes unsigned
+static uint16_t getBattery() {            //Get battery charge in mAh
+  return (uint16_t)getPacket(26,HIGH);    //Get the packet number 26 (Battery Level) 2 bytes unsigned
+}
+
+static bool getFull(void) {            //Get if the collector is full
+  if ((uint8_t)getPacket(15,LOW) > 200 )  //Get the packet number 15 (Dirt level) 1 byte unsigned //If dirt level > 200
+  
+    return HIGH;                          //HIGT if it's full
+  else 
+    return LOW;                           //LOW if it's not full
+}
+
+static bool getWall(void) {            //Get wall detection
+  if ((uint8_t)getPacket(8,LOW) == 1 )    //Get the packet number 8 (Wall detection) 1 byte unsigned
+    return HIGH;                          //HIGT if there is a wall
+  else 
+    return LOW;                           //LOW if there is no wall
+}
+
+static uint8_t getCliff(void) {           //Get cliff detection (LEFT | FRONT_LEFT | FRONT_RIGHT | RIGHT)
+  uint8_t loc_Byte = 0;
+
+  loc_Byte |=  ((uint8_t)getPacket(9,LOW)) << 3;  //Get the packet number 9 (Left cliff detector) 1 byte unsigned
+  loc_Byte |=  ((uint8_t)getPacket(10,LOW)) << 2; //Get the packet number 10 (Front left cliff detector) 1 byte unsigned
+  loc_Byte |=  ((uint8_t)getPacket(11,LOW)) << 1; //Get the packet number 11 (Front right cliff detector) 1 byte unsigned
+  loc_Byte |=  (uint8_t)getPacket(12,LOW);        //Get the packet number 12 (Right cliff detector) 1 byte unsigned
+  
+  return loc_Byte;     
 }
 
 static uint8_t getOmniInfra(void) {       //Get omni infrared
@@ -621,19 +657,19 @@ static int16_t getDistance(void) {        //Distance in cm (Backward is positive
 }
 
 static int16_t getAngle(void) {           //Angle in degres (left positive)
-  return (int16_t)getPacket(20,HIGH);     //Get the packet number 19 (Angle) 2 bytes signed
+  return (int16_t)getPacket(20,HIGH);     //Get the packet number 20 (Angle) 2 bytes signed
 }
 
 static uint8_t getBumper(void) {
-  return (uint8_t)getPacket(45,LOW);     //Get the packet number 45 (Light Bumper) 1 byte unsigned
+  return (uint8_t)getPacket(45,LOW);      //Get the packet number 45 (Light Bumper) 1 byte unsigned
 }
 
 static uint16_t getLeftEncoder(void) {
-  return (uint16_t)getPacket(53,HIGH);     //Get the packet number 45 (Light Bumper) 2 bytes unsigned
+  return (uint16_t)getPacket(44,HIGH);    //Get the packet number 44 (Light Bumper) 2 bytes unsigned
 }
 
-static uint16_t getRightEncoder(void) {
-  return (uint16_t)getPacket(54,HIGH);     //Get the packet number 45 (Light Bumper) 2 bytes unsigned
+static uint16_t getRightEncoder(void) {   //Get right encoder
+  return (uint16_t)getPacket(43,HIGH);    //Get the packet number 43 (Light Bumper) 2 bytes unsigned
 }
 
  /**************************************************************************
@@ -649,16 +685,16 @@ static int16_t getPacket(uint8_t ID, boolean TwoBytes)
 
   if(TwoBytes != 0)  //if two bytes to read
   {
-    if(readByte(loc_Byte_H, 50) == NO_BYTE_READ)   //Read the first byte end if no byte is read
-      return 0;                                    //Return error code
+    if(readByte(loc_Byte_H, 50) == NO_BYTE_READ)    //Read the first byte end if no byte is read
+      return 0;                                     //Return error code
   }
   
   if(readByte(loc_Byte_L, 50) == NO_BYTE_READ)      //Read the byte end if no byte is read
-      return 0;                                    //Return error code
-  
-  _mqttClient.publish(_mqttRoombaInputTopic, String("ID " + ID).c_str());
-  _mqttClient.publish(_mqttRoombaInputTopic, String(((uint16_t)(loc_Byte_H << 8) | loc_Byte_L),BIN).c_str());
-  _mqttClient.publish(_mqttRoombaInputTopic, String((loc_Byte_H << 8) | loc_Byte_L).c_str());
+      return 0;                                     //Return error code
+
+  //_mqttClient.publish(_mqttRoombaInputTopic, String("ID " + ID).c_str());
+  //_mqttClient.publish(_mqttRoombaInputTopic, String((loc_Byte_H << 8) | loc_Byte_L).c_str());
+  //_mqttClient.publish(_mqttRoombaInputTopic, String(((uint16_t)(loc_Byte_H << 8) | loc_Byte_L),BIN).c_str());
   
   return ((loc_Byte_H << 8) | loc_Byte_L);
 }
