@@ -122,7 +122,9 @@ static void freeControl();
 
 static EIOMode getMode(void);
 static uint16_t getBatteryCharge(void);
-static uint8_t getInfra(void);
+static uint8_t getOmniInfra(void);
+static uint8_t getLeftInfra(void);
+static uint8_t getRightInfra(void);
 static int16_t getDistance(void);
 static int16_t getAngle(void);
 static uint8_t getBumper(void);
@@ -184,7 +186,9 @@ static TsInputCommandMap inputCmds[] =
 {
     {"GETMODE",                (int (*)(void)) (&getMode)},
     {"GETBATT",                (int (*)(void)) (&getBatteryCharge)},
-    {"GETINFRA",               (int (*)(void)) (&getInfra)},
+    {"GETOINFRA",              (int (*)(void)) (&getOmniInfra)},
+    {"GETLINFRA",              (int (*)(void)) (&getLeftInfra)},
+    {"GETRINFRA",              (int (*)(void)) (&getRightInfra)},
     {"GETBUMPER",              (int (*)(void)) (&getBumper)},
     {"GETDISTANCE",            (int (*)(void)) (&getDistance)},
     {"GETANGLE",               (int (*)(void)) (&getAngle)},
@@ -592,23 +596,31 @@ static void writeDock() {
  * PACKET COMMANDS
  **************************************************************************/
 
-static EIOMode getMode(void) {
-  return (EIOMode)getPacket(35,LOW);     //Get the packet number 35 (Mode) 1 byte unsigned
+static EIOMode getMode(void) {            //Get battery mode
+  return (EIOMode)getPacket(35,LOW);      //Get the packet number 35 (Mode) 1 byte unsigned
 }
 
-static uint16_t getBatteryCharge() {
-  return (uint16_t)getPacket(25,HIGH);     //Get the packet number 25 (Battery Level) 2 bytes unsigned
+static uint16_t getBatteryCharge() {      //Get battery charge in 
+  return (uint16_t)getPacket(25,HIGH);    //Get the packet number 25 (Battery Level) 2 bytes unsigned
 }
 
-static uint8_t getInfra(void) {
-  return (uint8_t)getPacket(52,LOW);     //Get the packet number 52 (Infrared Left) 1 byte unsigned
+static uint8_t getOmniInfra(void) {       //Get omni infrared
+  return (uint8_t)getPacket(17,LOW);      //Get the packet number 17 (Omni Infrared) 1 byte unsigned
 }
 
-static int16_t getDistance(void) {                //Distance in cm (Back positive)
-  return (int16_t)getPacket(19,HIGH);     //Get the packet number 19 (Distance) 2 bytes signed
+static uint8_t getLeftInfra(void) {       //Get left infrared
+  return (uint8_t)getPacket(52,LOW);      //Get the packet number 52 (Left Infrared) 1 byte unsigned
 }
 
-static int16_t getAngle(void) {          //Angle in degres (left positive)
+static uint8_t getRightInfra(void) {      //Get right infrared
+  return (uint8_t)getPacket(53,LOW);      //Get the packet number 53 (Right Infrared) 1 byte unsigned
+}
+
+static int16_t getDistance(void) {        //Distance in cm (Backward is positive)
+  return -(int16_t)getPacket(19,HIGH);    //Get the packet number 19 (Distance) 2 bytes signed
+}
+
+static int16_t getAngle(void) {           //Angle in degres (left positive)
   return (int16_t)getPacket(20,HIGH);     //Get the packet number 19 (Angle) 2 bytes signed
 }
 
